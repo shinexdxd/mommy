@@ -6,6 +6,7 @@ def db_connection():
     conn = sqlite3.connect('bot_database.db')
     return conn
 
+# Petname Function
 def get_user_id_by_petname(petname):
     conn = db_connection()
     cursor = conn.cursor()

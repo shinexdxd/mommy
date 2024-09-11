@@ -1,7 +1,7 @@
 import sqlite3
 
 def setup_database():
-    conn = sqlite3.connect('mommybot.db')
+    conn = sqlite3.connect('bot_database.db')
     cursor = conn.cursor()
 
     # Create Users Table
@@ -48,6 +48,17 @@ def setup_database():
         )
     ''')
 
+    # Create Uptime Context Table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS uptime_contexts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            context_name TEXT UNIQUE NOT NULL,
+            message_id INTEGER NOT NULL,
+            channel_id INTEGER NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
     # Create Reaction Roles Table (optional for future features)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS reaction_roles (
@@ -58,6 +69,9 @@ def setup_database():
             PRIMARY KEY (message_id, emoji)
         )
     ''')
+
+
+
 
     conn.commit()
     conn.close()

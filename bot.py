@@ -1,71 +1,75 @@
 import discord
-from utilities import db_connection
-import sqlite3
-import asyncio
-from datetime import datetime, timedelta
-import re
-import points
-import reminders
-import tasks
-import rewards
-from robot import bot
+from discord.ext import commands, tasks
 from dotenv import load_dotenv
 import os
+import asyncio
+from cogs.uptime import Uptime
+from cogs.reminders import Reminders
+from cogs.points import Points
+from cogs.rewards import Rewards
+from cogs.tasks import Tasks
+from cogs.fun import Fun
 
-# Event: When the bot is ready
+# Initialize intents
+intents = discord.Intents.default()
+intents.members = True
+intents.message_content = True
+
+# Initialize bot with intents and custom command prefix
+bot = commands.Bot(command_prefix=lambda msg: 'mommy, ' if msg.channel.id not in [1282898835848564858] else '', intents=intents)
+
+# Load environment variables from .env file
+load_dotenv()
+TOKEN = os.getenv('DISCORD_TOKEN')
+
+async def load_cogs():
+    try:
+        await bot.add_cog(Uptime(bot))
+        print("successfully loaded uptime cog.")
+    except Exception as e:
+        print(f"failed to load uptime cog: {e}")
+
+    try:
+        await bot.add_cog(Reminders(bot))
+        print("successfully loaded reminders cog.")
+    except Exception as e:
+        print(f"failed to load reminders cog: {e}")
+
+    try:
+        await bot.add_cog(Points(bot))
+        print("successfully loaded points cog.")
+    except Exception as e:
+        print(f"failed to load points cog: {e}")
+
+    try:
+        await bot.add_cog(Tasks(bot))
+        print("successfully loaded tasks cog.")
+    except Exception as e:
+        print(f"failed to load tasks cog: {e}")
+
+    try:
+        await bot.add_cog(Rewards(bot))
+        print("successfully loaded rewards cog.")
+    except Exception as e:
+        print(f"failed to load rewards cog: {e}")
+
+    try:
+        await bot.add_cog(Fun(bot))
+        print("successfully loaded fun cog.")
+    except Exception as e:
+        print(f"failed to load fun cog: {e}")
+
+
 @bot.event
 async def on_ready():
-    print(f'Logged in as {bot.user}')
-    for guild in bot.guilds:
-        channel = guild.text_channels[5]  # Send to channel 5
-        await channel.send("online, baking pie.")
+    print(f'{bot.user} has logged in.')
+    await bot.wait_until_ready()  # Wait until the bot is fully ready
+    channel = bot.get_channel(1282898835848564858)  # Replace CHANNEL_ID with the ID of the channel you want to send the message in
+    await channel.send('online. baking pie.')
 
-# Command: Simple hello command
-@bot.command(name='hello')
-async def hello(ctx):
-    await ctx.send('hello, cutie!')
+async def main():
+    await load_cogs()
+    await bot.start(TOKEN)
 
-
-# Command: Simple hello command
-@bot.command(name='treat?')
-async def treat(ctx):
-    await ctx.send('NO TREAT.')
-
-
-# Command: Set Petname
-@bot.command(name='setpetname')
-async def set_petname(ctx, *, petname: str):
-    conn = db_connection()
-    cursor = conn.cursor()
-
-    cursor.execute('UPDATE users SET petname = ? WHERE user_id = ?', (petname, ctx.author.id))
-    conn.commit()
-    conn.close()
-
-    await ctx.send(f"your petname has been set to '{petname}'.")
-
-# Command: List Commands
-@bot.command(name='commands')
-async def list_commands(ctx):
-    embed = discord.Embed(title="Available Commands", color=discord.Color.blue())
-    embed.add_field(name="hello", value="greet the bot.", inline=False)
-    embed.add_field(name="setpetname", value="set your preferred submissive petname.", inline=False)
-    embed.add_field(name="addtask", value="add a task with points. usage: `mommy, addtask <points> <task>`", inline=False)
-    embed.add_field(name="viewtasks", value="view all your tasks.", inline=False)
-    embed.add_field(name="completetask", value="complete a task by id and optionally award points to a user. usage: `mommy, completetask <task_id> [<user>]`", inline=False)
-    embed.add_field(name="viewreminders", value="view all your reminders.", inline=False)
-    embed.add_field(name="deletereminder", value="delete a reminder by id. usage: `mommy, deletereminder <reminder_id>`", inline=False)
-    embed.add_field(name="givepoints", value="give points to a user or everyone with a reason. usage: `mommy, givepoints <user> <points> <reason>`", inline=False)
-    embed.add_field(name="viewpoints", value="view your total points.", inline=False)
-    embed.add_field(name="resetpoints", value="reset points for a user. usage: `mommy, resetpoints <user>`", inline=False)
-    embed.add_field(name="commands", value="list all commands with usage examples.", inline=False)
-    embed.add_field(name="leaderboard", value="view points leaderboard.", inline=False)
-    embed.add_field(name="createreward", value="`mommy, createreward <point_value> <description>", inline=False)
-    embed.add_field(name="claimreward", value="`mommy, claimreward <reward_id>` - claim a reward for points.", inline=False)
-    embed.add_field(name="viewrewards", value="`mommy, viewrewards` - view all available rewards.", inline=False)
-    await ctx.send(embed=embed)
-
-load_dotenv()  # Load environment variables from .env file
-TOKEN = os.getenv('DISCORD_TOKEN')  # Get the token from environment variables
-
-bot.run(TOKEN)
+# Run the bot
+asyncio.run(main())
