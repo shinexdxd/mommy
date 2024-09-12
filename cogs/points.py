@@ -2,7 +2,13 @@ import discord
 import sqlite3
 from discord.ext import commands, tasks
 import importlib.util
-from utilities import db_connection, get_user_id_by_petname
+from core.utilities import db_connection, get_user_id_by_petname, get_petname
+from core.bot_instance import bot
+
+special_keywords = {
+    'me': lambda ctx: (ctx.author.id, ctx.author.mention),
+    'us': lambda ctx: (None, '@here')
+}
 
 class Points(commands.Cog):
     def __init__(self, bot):
@@ -10,12 +16,12 @@ class Points(commands.Cog):
 
     @commands.command(name='leaderboard')
     async def leaderboard(self, ctx):
-        print("Leaderboard command called")  # Add this line to see if the command is being called
+        print("leaderboard command called")  # Add this line to see if the command is being called
         conn = db_connection()
         cursor = conn.cursor()
         
-        # Modify the query to also fetch petnames
-        cursor.execute('SELECT user_id, points, petname FROM users ORDER BY points DESC LIMIT 10')
+        # Modify the query to also fetch petnames and ignore users with zero points
+        cursor.execute('SELECT user_id, points, petname FROM users WHERE points > 0 ORDER BY points DESC LIMIT 10')
         leaderboard = cursor.fetchall()
         conn.close()
 
@@ -38,18 +44,14 @@ class Points(commands.Cog):
         await ctx.send(embed=embed)
         print("Embed sent")  # Add this line to see if the command is successfully sending the embed
 
+
     @commands.command(name='givepoints')
     async def give_points(self, ctx, user: str, points: int, *, reason: str):
         conn = db_connection()
         cursor = conn.cursor()
 
-        # If user is 'me', target the author
-        if user == "me":
-            target_user_id = ctx.author.id
-            target_user_mention = ctx.author.mention
-        elif user == "us":
-            target_user_id = None
-            target_user_mention = "@here"
+        if user in special_keywords:
+            target_user_id, target_user_mention = special_keywords[user](ctx)
         else:
             # First, try to parse a user mention
             target_user = ctx.message.mentions
@@ -67,9 +69,10 @@ class Points(commands.Cog):
 
         # Award points
         if target_user_id is None:
-            # Give points to everyone in the channel
+            # Give points to everyone in the channel, excluding bot users
             for member in ctx.guild.members:
-                cursor.execute('INSERT INTO users (user_id, points) VALUES (?, ?) ON CONFLICT(user_id) DO UPDATE SET points = points + ?', (member.id, points, points))
+                if not member.bot:  # Ignore bot users
+                    cursor.execute('INSERT INTO users (user_id, points) VALUES (?, ?) ON CONFLICT(user_id) DO UPDATE SET points = points + ?', (member.id, points, points))
         else:
             cursor.execute('INSERT INTO users (user_id, points) VALUES (?, ?) ON CONFLICT(user_id) DO UPDATE SET points = points + ?', (target_user_id, points, points))
 
@@ -79,7 +82,7 @@ class Points(commands.Cog):
         conn.commit()
         conn.close()
 
-        if user == "us":
+        if target_user_id is None:
             await ctx.send(f"gave {points} points to everyone in the channel with reason: '{reason}'.")
         else:
             await ctx.send(f"gave {points} points to {target_user_mention} with reason: '{reason}'.")
@@ -111,8 +114,11 @@ class Points(commands.Cog):
             user_mention = ctx.author.mention
         else:
             # Check if the user input is a petname
-            user_id = get_user_id_by_petname(user)
-            if user_id is None:
+            target_user_id = get_user_id_by_petname(user)
+            if target_user_id:
+                user_id = target_user_id
+                user_mention = user
+            else:
                 # Check if it's a mention
                 mentioned_user = ctx.message.mentions
                 if mentioned_user:
@@ -121,14 +127,9 @@ class Points(commands.Cog):
                 else:
                     await ctx.send(f"could not find a user or petname '{user}'.")
                     return
-            else:
-                user_mention = user  # Use the petname as the mention
 
         cursor.execute('UPDATE users SET points = 0 WHERE user_id = ?', (user_id,))
         conn.commit()
         conn.close()
 
         await ctx.send(f"reset points for {user_mention} to zero.")
-
-def setup(bot):
-    bot.add_cog(Points(bot))

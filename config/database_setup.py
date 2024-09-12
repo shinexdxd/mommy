@@ -1,7 +1,7 @@
 import sqlite3
 
 def setup_database():
-    conn = sqlite3.connect('bot_database.db')
+    conn = sqlite3.connect('data/bot_database.db')
     cursor = conn.cursor()
 
     # Create Users Table
@@ -36,6 +36,18 @@ def setup_database():
         )
     ''')
 
+    # Create Rewards Log Table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS rewards_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            points INTEGER,
+            reason TEXT,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users (user_id)
+        )
+    ''')
+
     # Create Rewards Table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS rewards (
@@ -48,14 +60,19 @@ def setup_database():
         )
     ''')
 
-    # Create Uptime Context Table
+    # Create Reminders and Uptime Contexts Table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS uptime_contexts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            context_name TEXT UNIQUE NOT NULL,
-            message_id INTEGER NOT NULL,
-            channel_id INTEGER NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            type TEXT NOT NULL,  -- 'reminder' or 'uptime'
+            context_name TEXT,  -- for uptimes
+            message_id INTEGER,  -- for uptimes
+            channel_id INTEGER,  -- for uptimes
+            reminder_message TEXT,  -- for reminders
+            reminder_time TIMESTAMP,  -- for reminders
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            user_id INTEGER NOT NULL,  -- links to the users table
+            FOREIGN KEY (user_id) REFERENCES users (user_id)
         )
     ''')
 
@@ -69,9 +86,6 @@ def setup_database():
             PRIMARY KEY (message_id, emoji)
         )
     ''')
-
-
-
 
     conn.commit()
     conn.close()

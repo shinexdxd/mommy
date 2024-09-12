@@ -1,8 +1,8 @@
-from robot import bot
 from discord.ext import commands, tasks
 import discord
 import random
-from utilities import db_connection, get_user_id_by_petname  # Import utility functions
+from core.utilities import db_connection, get_user_id_by_petname, get_petname
+from core.bot_instance import bot
 
 class Fun(commands.Cog):
     def __init__(self, bot):
@@ -10,34 +10,13 @@ class Fun(commands.Cog):
 
     @commands.command(name='hello')
     async def hello(self, ctx):
-        conn = db_connection()
-        cursor = conn.cursor()
-
-        cursor.execute('SELECT petname FROM users WHERE user_id = ?', (ctx.author.id,))
-        petname = cursor.fetchone()
-
-        conn.close()
-
-        if petname:
-            await ctx.send(f"hello, {petname[0]}!")
-        else:
-            await ctx.send('hello, cutie!')
+        print("hello command executed")
+        petname = await get_petname(ctx)
+        await ctx.send(f"hello, {petname}!")
 
     @commands.command(name='treat?')
     async def treat(self, ctx):
-        conn = db_connection()
-        cursor = conn.cursor()
-
-        cursor.execute('SELECT petname FROM users WHERE user_id = ?', (ctx.author.id,))
-        petname = cursor.fetchone()
-
-        conn.close()
-
-        if petname:
-            petname = petname[0]
-        else:
-            petname = 'cutie'
-
+        petname = await get_petname(ctx)
         responses = [
             'NO TREAT.',
             'NO TREAT.',
@@ -50,13 +29,26 @@ class Fun(commands.Cog):
 
         await ctx.send(random.choice(responses))
 
-    @commands.command(name='setpetname')
-    async def set_petname(self, ctx, *, petname: str):
-        conn = db_connection()
-        cursor = conn.cursor()
+@commands.command(name='setpetname')
+async def set_petname(self, ctx, *, petname: str):
+    # Limit the pet name to 30 characters
+    max_length = 30
+    if len(petname) > max_length:
+        await ctx.send(f"petname too long! please keep it under {max_length} characters.")
+        return
 
-        cursor.execute('UPDATE users SET petname = ? WHERE user_id = ?', (petname, ctx.author.id))
-        conn.commit()
-        conn.close()
+    # Allow most Unicode characters, but disallow control characters (e.g., \n, \t)
+    if any(ord(c) < 32 or ord(c) > 126 for c in petname):
+        await ctx.send("invalid characters in petname. please use only printable characters.")
+        return
 
-        await ctx.send(f"your petname has been set to '{petname}'.")
+    conn = db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute('UPDATE users SET petname = ? WHERE user_id = ?', (petname, ctx.author.id))
+    conn.commit()
+    conn.close()
+
+    await ctx.send(f"your petname has been set to '{petname}'.")
+
+    #tested91124

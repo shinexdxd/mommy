@@ -1,7 +1,7 @@
-from robot import bot
 from discord.ext import commands, tasks
 import discord
-from utilities import db_connection, get_user_id_by_petname  # Import utility functions
+from core.utilities import db_connection, get_user_id_by_petname, get_petname  # Import utility functions
+from core.bot_instance import bot
 
 class Tasks(commands.Cog):
     def __init__(self, bot):
@@ -19,6 +19,7 @@ class Tasks(commands.Cog):
 
         await ctx.send(f"added task '{task}' with {points} points.")
 
+
     # Command: View Tasks
     @commands.command(name='viewtasks')
     async def view_tasks(self, ctx):
@@ -33,9 +34,14 @@ class Tasks(commands.Cog):
             await ctx.send("you have no tasks.")
             return
 
+        sorted_tasks = sorted(tasks, key=lambda x: x[1], reverse=True)
         embed = discord.Embed(title="our tasks", color=discord.Color.blue())
-        for task_id, points, task in tasks:
-            embed.add_field(name=f"Task ID: {task_id}", value=f"Points: {points}\n{task}", inline=False)
+        for task_id, points, task in sorted_tasks:
+            embed.add_field(
+                name=f"**{task}**",
+                value=f"points: {points}**\n**completion id: {task_id}",
+                inline=False
+            )
         
         await ctx.send(embed=embed)
 
