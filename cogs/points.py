@@ -2,13 +2,8 @@ import discord
 import sqlite3
 from discord.ext import commands, tasks
 import importlib.util
-from core.utilities import db_connection, get_user_id_by_petname, get_petname
+from core.utilities import db_connection, get_user_id_by_petname, get_petname, special_keywords
 from core.bot_instance import bot
-
-special_keywords = {
-    'me': lambda ctx: (ctx.author.id, ctx.author.mention),
-    'us': lambda ctx: (None, '@here')
-}
 
 class Points(commands.Cog):
     def __init__(self, bot):
@@ -29,7 +24,7 @@ class Points(commands.Cog):
             await ctx.send("no points data available.")
             return
 
-        embed = discord.Embed(title="Points Leaderboard", color=discord.Color.green())
+        embed = discord.Embed(title="✨points leaderboard✨", color=discord.Color.green())
         
         for idx, (user_id, points, petname) in enumerate(leaderboard, start=1):
             user = self.bot.get_user(user_id)

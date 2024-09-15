@@ -21,7 +21,7 @@ class Tasks(commands.Cog):
 
 
     # Command: View Tasks
-    @commands.command(name='viewtasks')
+    @commands.command(name='tasks')
     async def view_tasks(self, ctx):
         conn = db_connection()
         cursor = conn.cursor()
@@ -35,7 +35,7 @@ class Tasks(commands.Cog):
             return
 
         sorted_tasks = sorted(tasks, key=lambda x: x[1], reverse=True)
-        embed = discord.Embed(title="our tasks", color=discord.Color.blue())
+        embed = discord.Embed(title="✨our tasks✨", color=discord.Color.blue())
         for task_id, points, task in sorted_tasks:
             embed.add_field(
                 name=f"**{task}**",
