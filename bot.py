@@ -13,7 +13,9 @@ from cogs.fun import Fun #tested
 from core.bot_instance import bot
 
 # load environment variables from .env file
-load_dotenv()
+env_path = os.path.join('config', '.env')
+
+load_dotenv(dotenv_path=env_path)
 TOKEN = os.getenv('DISCORD_TOKEN')
 
 async def load_cogs():
@@ -32,8 +34,11 @@ async def on_ready():
     for command in bot.commands:
         print(f"  - {command.name}")
     await bot.wait_until_ready()  # wait until the bot is fully ready
-    channel = bot.get_channel(1282898835848564858)  # move to config
-    await channel.send('online. baking pie.')
+    channel = bot.get_channel(int(os.getenv('BOT_CHANNEL'))) 
+    if channel:
+        await channel.send('online. baking pie.')
+    else:
+        print('channel not found')
 
 async def main():
     await load_cogs()
