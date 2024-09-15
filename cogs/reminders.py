@@ -1,165 +1,272 @@
 import discord
 from discord.ext import commands, tasks
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 from dateutil.relativedelta import relativedelta
 import re
-from core.utilities import db_connection
+import os
+from core.utilities import db_connection, get_user_id_by_petname, get_petname, special_keywords
+import logging
+from dotenv import load_dotenv
+
+env_path = os.path.join('config', '.env')
+load_dotenv(dotenv_path=env_path)
+logging.basicConfig(level=logging.INFO)
 
 class Reminders(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.check_reminders.start()  # start the background task when the cog is loaded
+        self.check_reminders.start()  # Start the task loop when the cog is loaded
 
     def cog_unload(self):
-        self.check_reminders.cancel()  # stop the background task when the cog is unloaded
+        self.check_reminders.cancel()  # Cancel the task loop when the cog is unloaded
 
-    # Command: Create Reminder
+    def get_user_timezone(self, user_id):
+        conn = db_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT timezone FROM users WHERE user_id = ?', (user_id,))
+        result = cursor.fetchone()
+        conn.close()
+        return result[0] if result else 'utc'  # Default to UTC if no timezone is set
+
+    def get_timezone_offset(self, timezone_str):
+        try:
+            tz = ZoneInfo(timezone_str)
+            now = datetime.now(tz)
+            offset = now.utcoffset().total_seconds() / 3600
+            return offset
+        except Exception as e:
+            logging.error(f"error getting timezone offset: {e}")
+            return 0
+
+    def parse_duration_to_unix(self, duration_str):
+        """
+        Converts a duration string (e.g., "10m", "1h", "2d", "30s", "3M") into a Unix timestamp.
+        """
+        if not re.match(r'\d+[a-zA-Z]+', duration_str):
+            logging.error(f"invalid duration string: {duration_str}")
+            raise ValueError("invalid duration string!")
+
+        try:
+            amount = int(re.search(r'\d+', duration_str).group())  # Get the number
+            unit = re.search(r'[a-zA-Z]+', duration_str).group()  # Get the unit
+
+            if unit == 's':  # Seconds
+                return int((datetime.utcnow() + timedelta(seconds=amount)).timestamp())
+            elif unit == 'm':  # Minutes
+                return int((datetime.utcnow() + timedelta(minutes=amount)).timestamp())
+            elif unit == 'h':  # Hours
+                return int((datetime.utcnow() + timedelta(hours=amount)).timestamp())
+            elif unit == 'd':  # Days
+                return int((datetime.utcnow() + timedelta(days=amount)).timestamp())
+            elif unit == 'M':  # Months
+                return int((datetime.utcnow() + relativedelta(months=amount)).timestamp())
+            elif unit == 'y':  # Years
+                return int((datetime.utcnow() + relativedelta(years=amount)).timestamp())
+            else:
+                raise ValueError("invalid time unit!")
+        except Exception as e:
+            logging.error(f"error parsing duration '{duration_str}': {e}")
+            raise
+
+    @commands.command(name='settimezone')
+    async def set_timezone(self, ctx, timezone: str):
+        try:
+            tz = ZoneInfo(timezone)
+        except Exception:
+            await ctx.send("invalid timezone! please provide a valid timezone string (e.g., 'america/chicago').")
+            return
+
+        conn = db_connection()
+        cursor = conn.cursor()
+        cursor.execute('UPDATE users SET timezone = ? WHERE user_id = ?', (timezone, ctx.author.id))
+        conn.commit()
+        conn.close()
+
+        await ctx.send(f"your timezone has been set to {timezone}.")
+
     @commands.command(name='remind')
     async def remind(self, ctx, *, datetime_label: str):
-        print(f"received remind command with input: {datetime_label}")
-        pattern = r"(in|at)\s*(\d+[a-zA-Z]+)\s*(.*)"
+        logging.info(f"received remind command with input: {datetime_label}")
+
+        pattern = r"^(\w+)\s*(in|at)\s*(\d+[a-zA-Z]+)\s*(.*)"
         match = re.match(pattern, datetime_label)
-        print(f"match result: {match}")
 
-        # Handle datetime and target identification
-        if match is None:
-            # Handle 'me', 'us', or user mentions
-            if datetime_label.lower().startswith("me"):
-                target = ctx.author  # DM the user
-                datetime_label = datetime_label[3:].strip()
-            elif datetime_label.lower().startswith("us"):
-                target = "us"  # Flag for "@here" in the channel
-                datetime_label = datetime_label[3:].strip()
-            else:
-                # Check for a user mention
-                user_mention_pattern = r"<@!?(\d+)>"
-                user_mention_match = re.search(user_mention_pattern, datetime_label)
-                if user_mention_match:
-                    target = await ctx.guild.fetch_member(int(user_mention_match.group(1)))
-                    datetime_label = datetime_label.replace(user_mention_match.group(0), "").strip()
-                else:
-                    print("invalid datetime string or label.")
-                    await ctx.send("invalid datetime string or label.")
-                    return
+        if not match:
+            await ctx.send("invalid format. please use 'in <duration> <message>' or 'at <time> <message>'.")
+            return
 
-            # Re-match the datetime_label
-            match = re.match(pattern, datetime_label)
-            if match is None:
-                print("invalid datetime string or label.")
-                await ctx.send("invalid datetime string or label.")
+        target_str = match.group(1).strip()
+        datetime_str = match.group(3).strip()
+        label = match.group(4).strip()
+
+        logging.info(f"parsed target: {target_str}, datetime: {datetime_str}, label: {label}")
+
+        if target_str in ["me", "us", "we", "you"]:
+            target_user_id, mention = special_keywords[target_str](ctx)
+            if target_user_id is None and target_str != "you":
+                target_user_id = 1 if target_str in ["us", "we"] else ctx.author.id
+            if target_user_id is None:
+                await ctx.send("error: unable to determine target user id.")
                 return
-
-        # Extract datetime and label
-        datetime_str = match.group(2)
-        label = match.group(3)
-        print(f"datetime string: {datetime_str}")
-        print(f"label: {label}")
-
-        def parse_datetime_str(datetime_str):
-            datetime_pattern = r"(\d+)([a-zA-Z]+)"
-            match_datetime = re.match(datetime_pattern, datetime_str)
-            if match_datetime:
-                duration = int(match_datetime.group(1))
-                unit = match_datetime.group(2)
-                if unit == "s":
-                    reminder_time = datetime.utcnow() + timedelta(seconds=duration)
-                elif unit == "m":
-                    reminder_time = datetime.utcnow() + timedelta(minutes=duration)
-                elif unit == "h":
-                    reminder_time = datetime.utcnow() + timedelta(hours=duration)
-                elif unit == "d":
-                    reminder_time = datetime.utcnow() + timedelta(days=duration)
-                elif unit == "w":
-                    reminder_time = datetime.utcnow() + timedelta(weeks=duration)
-                elif unit == "M":
-                    reminder_time = datetime.utcnow() + relativedelta(months=duration)
-                elif unit == "y":
-                    reminder_time = datetime.utcnow() + relativedelta(years=duration)
-                else:
-                    raise ValueError("Unknown unit")
-                return reminder_time
-
-            raise ValueError("invalid datetime string")
-
-        # Parse the datetime string
-        try:
-            reminder_time = parse_datetime_str(datetime_str)
-        except ValueError:
-            await ctx.send("invalid datetime string. please use 'in <duration>'.")
-            return
-
-        # Round reminder time to the nearest minute
-        reminder_time = reminder_time.replace(second=0, microsecond=0)
-
-        # Store the reminder in the database
-        conn = db_connection()
-        cursor = conn.cursor()
-
-        print("inserting reminder into database")
-        try:
-            if target == "us":
-                cursor.execute('INSERT INTO uptime_contexts (user_id, reminder_time, reminder_message, type, target) VALUES (?, ?, ?, ?, ?)', (ctx.author.id, reminder_time, label, 'reminder', 1))  # Store 1 as the target for "us"
-            elif isinstance(target, discord.Member):
-                cursor.execute('INSERT INTO uptime_contexts (user_id, reminder_time, reminder_message, type, target) VALUES (?, ?, ?, ?, ?)', (ctx.author.id, reminder_time, label, 'reminder', target.id))
-            else:
-                cursor.execute('INSERT INTO uptime_contexts (user_id, reminder_time, reminder_message, type, target) VALUES (?, ?, ?, ?, ?)', (ctx.author.id, reminder_time, label, 'reminder', ctx.guild.id))
-            conn.commit()
-        except Exception as e:
-            print(f"error inserting reminder into database: {e}")
-            await ctx.send(f"error inserting reminder into database: {e}")
-            return
-
-        conn.close()
-
-        # Format success message
-        reminder_time_str = reminder_time.strftime('%Y-%m-%d %H:%M')
-        if target == "us":
-            target_str = "@here"
-        elif isinstance(target, discord.Member):
-            target_str = target.mention  # Tag the user
+            label = label.replace(target_str, mention or f"<@{target_user_id}>")
         else:
-            target_str = "@everyone"
+            petname_match = re.search(r"\b(\w+)\b", label)
+            if petname_match:
+                petname = petname_match.group(1)
+                logging.info(f"resolved petname: {petname}")
+                target_user_id = get_user_id_by_petname(petname)
+                if target_user_id:
+                    label = label.replace(petname, f"<@{target_user_id}>")
+                else:
+                    await ctx.send("error: unable to determine target user id.")
+                    return
+            else:
+                target_user_id = ctx.author.id
 
-        print("sending success message")
-        await ctx.send(f"reminder set for {target_str} at {reminder_time_str} with label: {label}.")
+        try:
+            reminder_time = self.parse_duration_to_unix(datetime_str)
+            logging.info(f"reminder time (unix): {reminder_time}")
+        except ValueError as e:
+            await ctx.send(f"error parsing time: {e}")
+            return
 
-    # Background task: Check Reminders
-    @tasks.loop(minutes=1)
-    async def check_reminders(self):
+        current_time_unix = int(datetime.utcnow().timestamp())
         conn = db_connection()
         cursor = conn.cursor()
 
-        current_time = datetime.utcnow()
-        print(f"checking reminders at {current_time}...")
+        try:
+            cursor.execute('INSERT INTO uptime_contexts (user_id, reminder_time, reminder_message, type, created_at, target) VALUES (?, ?, ?, ?, ?, ?)',
+                           (ctx.author.id, reminder_time, label, 'reminder', current_time_unix, target_user_id))
+            conn.commit()
+            logging.info(f"reminder inserted into database with target {target_user_id}")
+        except Exception as e:
+            await ctx.send(f"error inserting reminder into database: {e}")
+        finally:
+            conn.close()
 
-        cursor.execute('SELECT id, user_id, reminder_time, reminder_message, target FROM uptime_contexts WHERE type = \'reminder\' AND reminder_time <= ?', (current_time,))
-        reminders = cursor.fetchall()
-        conn.close()
+        timezone_str = self.get_user_timezone(ctx.author.id)
+        timezone_offset = self.get_timezone_offset(timezone_str)
+        reminder_time_utc = datetime.fromtimestamp(reminder_time, timezone.utc)
+        reminder_time_local = reminder_time_utc + timedelta(hours=timezone_offset)
+        discord_timestamp = f"<t:{int(reminder_time_local.timestamp())}:R>"
 
-        for reminder_id, user_id, reminder_time, reminder_message, target in reminders:
-            if target == 1:  # This is an "us" reminder
-                channel = self.bot.get_channel(1198888931295506534)  # move to config
-                if channel:
-                    await channel.send(f"@here reminder!! {reminder_message}")
-                else:
-                    print(f"channel ID not found.")
-            else:
-                user = self.bot.get_user(user_id)
-                if user:
-                    try:
-                        await user.send(f"reminder!! {reminder_message}")
-                    except discord.HTTPException:
-                        print(f"failed to send reminder to user {user_id}")
-                else:
-                    print(f"user with id {user_id} not found.")
+        def get_user_mention(user_id):
+            return "@here" if user_id == 1 else f"<@{user_id}>"
 
-            # Delete the reminder after triggering
+        await ctx.send(f"reminder set for {discord_timestamp} with label: {label} for {get_user_mention(target_user_id)}.")
+
+    @commands.command(name='viewreminders')
+    async def view_reminders(self, ctx):
+        try:
             conn = db_connection()
             cursor = conn.cursor()
-            cursor.execute('DELETE FROM uptime_contexts WHERE id = ?', (reminder_id,))
+            cursor.execute('SELECT id, reminder_message, reminder_time, target FROM uptime_contexts WHERE type = \'reminder\'')
+            reminders = cursor.fetchall()
+            conn.close()
+
+            if not reminders:
+                await ctx.send("we have no upcoming reminders.")
+                return
+
+            embed = discord.Embed(title="✨our reminders✨", color=0x00ff00)
+            user_id = ctx.author.id
+            timezone_str = self.get_user_timezone(user_id)
+            timezone_offset = self.get_timezone_offset(timezone_str)
+
+            for id, reminder_message, reminder_time, target in reminders:
+                reminder_time_local = reminder_time + int(timezone_offset * 3600)
+                formatted_time = f"<t:{reminder_time_local}:F>"
+                
+                if target == 1:
+                    target_label = "everyone"
+                else:
+                    target_user = self.bot.get_user(target)
+                    if target_user:
+                        target_label = target_user.display_name
+                    else:
+                        target_label = "unknown"
+
+                embed.add_field(name=f"Reminder ID: {id}", value=f"Time: {formatted_time}\nMessage: {reminder_message}\nTarget: {target_label}", inline=False)
+
+            await ctx.send(embed=embed)
+        except Exception as e:
+            logging.error(f"error fetching reminders: {e}")
+            await ctx.send("error retrieving reminders.")
+
+    @commands.command(name='clearreminder')
+    async def clear_reminder(self, ctx, reminder_id: int):
+        try:
+            conn = db_connection()
+            cursor = conn.cursor()
+            cursor.execute('DELETE FROM uptime_contexts WHERE type = \'reminder\' AND id = ?', (reminder_id,))
             conn.commit()
             conn.close()
 
-    @check_reminders.before_loop
-    async def before_check_reminders(self):
-        await self.bot.wait_until_ready()  # Wait until the bot is ready before checking reminders
+            if cursor.rowcount > 0:
+                await ctx.send(f"reminder with id '{reminder_id}' has been cleared.")
+            else:
+                await ctx.send("no matching reminder found.")
+        except Exception as e:
+            logging.error(f"error clearing reminder: {e}")
+            await ctx.send("error clearing reminder.")
+
+    @commands.command(name='clearallreminders')
+    async def clear_all_reminders(self, ctx):
+        try:
+            conn = db_connection()
+            cursor = conn.cursor()
+            cursor.execute('DELETE FROM uptime_contexts WHERE type = \'reminder\'')
+            conn.commit()
+            conn.close()
+
+            if cursor.rowcount > 0:
+                await ctx.send(f"reminder with ID '{reminder_id}' has been cleared.")
+            else:
+                await ctx.send("no matching reminder found.")
+        except Exception as e:
+            logging.error(f"error clearing reminder: {e}")
+            await ctx.send("error clearing reminder.")
+
+    @tasks.loop(minutes=1)
+    async def check_reminders(self):
+        logging.info("Checking reminders")
+        try:
+            conn = db_connection()
+            cursor = conn.cursor()
+            current_time_unix = int(datetime.utcnow().timestamp())
+            cursor.execute('SELECT id, user_id, reminder_time, reminder_message, target FROM uptime_contexts WHERE type = \'reminder\' AND reminder_time <= ?', 
+                           (current_time_unix,))
+            reminders = cursor.fetchall()
+            conn.close()
+
+            for reminder_id, user_id, reminder_time, reminder_message, target in reminders:
+                if target == 1:
+                    # Send to the reminder channel
+                    reminder_channel_id = int(os.getenv('REMINDER_CHANNEL'))
+                    reminder_channel = self.bot.get_channel(reminder_channel_id)
+                    if reminder_channel:
+                        await reminder_channel.send(f"reminder for everyone: {reminder_message}")
+                else:
+                    # Send to the specific user
+                    user = self.bot.get_user(target)
+                    if user:
+                        try:
+                            await user.send(f"reminder: {reminder_message}")
+                        except discord.Forbidden:
+                            logging.error(f"cannot DM user {target}. sending in channel instead.")
+                            reminder_channel_id = int(os.getenv('REMINDER_CHANNEL'))
+                            reminder_channel = self.bot.get_channel(reminder_channel_id)
+                            if reminder_channel:
+                                await reminder_channel.send(f"reminder for {user.mention}: {reminder_message}")
+
+                # Remove the reminder from the database
+                conn = db_connection()
+                cursor = conn.cursor()
+                cursor.execute('DELETE FROM uptime_contexts WHERE id = ?', (reminder_id,))
+                conn.commit()
+                conn.close()
+
+        except Exception as e:
+            logging.error(f"error checking reminders: {e}")
+
