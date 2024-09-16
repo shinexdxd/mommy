@@ -1,14 +1,16 @@
 import discord
+import json
 from discord.ext import commands
 
 class Memories(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        # Set up emoji to channel mapping
-        self.memory_channels = {
-            '❤️': 'heart-memories',  # Replace with the actual name of your heart memories channel
-            '🌟': 'lol-memories',    # Replace with the actual name of your lol memories channel
-        }
+        # Load config from config/config.json with UTF-8 encoding
+        with open('config/config.json', 'r', encoding='utf-8') as f:
+            config = json.load(f)
+
+        # Set up emoji to channel mapping from the config file
+        self.memory_channels = config['memory_channels']
 
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload):
@@ -53,7 +55,3 @@ class Memories(commands.Cog):
 
             # Send the embed to the memory channel
             await memory_channel.send(embed=embed)
-
-# Add the cog to the bot
-async def setup(bot):
-    await bot.add_cog(Memories(bot))
