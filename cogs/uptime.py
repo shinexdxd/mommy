@@ -176,18 +176,27 @@ class Uptime(commands.Cog):
         conn = db_connection()
         cursor = conn.cursor()
 
-        cursor.execute('SELECT context_name FROM uptime_contexts')
-        contexts = cursor.fetchall()
+        try:
+            cursor.execute('SELECT context_name FROM uptime_contexts')
+            contexts = cursor.fetchall()
 
-        if not contexts:
-            await ctx.send("no uptime contexts found.")
+            if not contexts:
+                await ctx.send("no uptime contexts found.")
+                return
+
+            # Ensure context names are not None
+            context_list = "\n".join(context[0] for context in contexts if context[0] is not None)
+
+            if not context_list:
+                await ctx.send("no valid uptime contexts found.")
+            else:
+                await ctx.send(f"uptime contexts: {context_list}")
+
+        except sqlite3.Error as e:
+            await ctx.send(f"an error occurred: {e}")
+
+        finally:
             conn.close()
-            return
-
-        context_list = "\n".join(context[0] for context in contexts)
-        await ctx.send(f"Uptime contexts:\n{context_list}")
-
-        conn.close()
 
 
     #tested91124
