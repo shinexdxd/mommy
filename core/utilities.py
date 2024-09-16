@@ -35,34 +35,6 @@ def get_user_id_by_petname(petname, ctx=None):
     conn.close()
     return result[0] if result else None
 
-
-
-#something with datetime strings - probably stupid
-# def parse_datetime_str(datetime_str):
-#     try:
-#         reminder_time = dateparser.parse(datetime_str, relative=True)
-#         if reminder_time is None:
-#             raise ValueError("invalid datetime string")
-#         return reminder_time
-#     except ValueError as e:
-#         print(f"error: {e}")
-#         return None
-
-# Helper function to get timezone abbreviation
-def get_timezone_abbreviation(tz):
-    # Map timezone offsets to abbreviations
-    # You might need to update this mapping to cover all necessary timezones
-    tz_map = {
-        'America/Chicago': 'CDT',
-        'America/New_York': 'EDT',
-        'Europe/London': 'BST',
-        'UTC': 'UTC'
-}
-    return tz_map.get(tz.key, 'UTC')  # Fallback to 'UTC' if abbreviation is not found
-
-
-
-
 # Get Petname by User Function
 async def get_petname(ctx):
     conn = db_connection()
