@@ -10,7 +10,7 @@ class Rewards(commands.Cog):
         self.bot = bot
 
     # View Rewards
-    @commands.command(name='viewrewards')
+    @commands.command(name='rewards', aliases=['viewrewards'])
     async def viewrewards(self, ctx):
         conn = db_connection()
         cursor = conn.cursor()
@@ -20,7 +20,7 @@ class Rewards(commands.Cog):
         rewards = cursor.fetchall()
 
         # Create an embed to display the rewards
-        embed = discord.Embed(title="**Rewards**", color=0x00ff00)
+        embed = discord.Embed(title="**✨available rewards✨**", color=0x00ff00)
 
         for reward in rewards:
             id, description, point_value, consumable = reward
@@ -106,7 +106,7 @@ class Rewards(commands.Cog):
                 conn.close()
 
     # ClaimReward Command
-    @commands.command(name='claimreward')
+    @commands.command(name='claimreward', aliases =['claim'])
     async def claim_reward(self, ctx, reward_id: int, user: discord.Member = None):
         conn = db_connection()
         cursor = conn.cursor()
@@ -162,7 +162,7 @@ class Rewards(commands.Cog):
 
 
     # Remove Rewards
-    @commands.command(name='removereward')
+    @commands.command(name='removereward', aliases=['clearreward', 'deletereward'])
     @commands.has_permissions(administrator=True)  # Only allow admins to use this command
     async def remove_reward(self, ctx, reward_id: int):
         conn = db_connection()

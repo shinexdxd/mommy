@@ -8,7 +8,7 @@ class Fun(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command(name='hello')
+    @commands.command(name='hello', aliases=['hello?', 'hello!', 'hello.', 'hi.', 'hi', 'hi!', 'hi?', 'hey', 'hey.', 'hey!'])
     async def hello(self, ctx):
         print("hello command executed")
         petname = await get_petname(ctx)

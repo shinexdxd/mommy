@@ -50,7 +50,7 @@ class Uptime(commands.Cog):
         message_link = f"https://discord.com/channels/{ctx.guild.id}/{channel_id}/{message_id}"
         await ctx.send(f"uptime context '{context_name}' set for [message]({message_link}) with type {type}.")
  
-    @commands.command(name='uptime')
+    @commands.command(name='uptime', aliases=['getuptime'])
     async def uptime(self, ctx, context_name: str):
         conn = db_connection()
         cursor = conn.cursor()
@@ -171,7 +171,7 @@ class Uptime(commands.Cog):
 
     #     conn.close()
 
-    @commands.command(name='listcontexts')
+    @commands.command(name='listcontexts', aliases=['uptimes', 'viewuptimes', 'getuptimes', 'getalluptimes', 'alluptimes'])
     async def list_contexts(self, ctx):
         conn = db_connection()
         cursor = conn.cursor()

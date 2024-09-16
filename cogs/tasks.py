@@ -21,7 +21,7 @@ class Tasks(commands.Cog):
 
 
     # Command: View Tasks
-    @commands.command(name='tasks')
+    @commands.command(name='tasks', aliases=['viewtasks'])
     async def view_tasks(self, ctx):
         conn = db_connection()
         cursor = conn.cursor()

@@ -156,7 +156,7 @@ class Reminders(commands.Cog):
 
         await ctx.send(f"reminder set for {discord_timestamp} with label: {label} for {get_user_mention(target_user_id)}.")
 
-    @commands.command(name='viewreminders')
+    @commands.command(name='viewreminders', aliases=['reminders', 'getreminders'])
     async def view_reminders(self, ctx):
         try:
             conn = db_connection()
@@ -179,7 +179,7 @@ class Reminders(commands.Cog):
                 formatted_time = f"<t:{reminder_time_local}:F>"
                 
                 if target == 1:
-                    target_label = "everyone"
+                    target_label = "@here"
                 else:
                     target_user = self.bot.get_user(target)
                     if target_user:
@@ -194,7 +194,7 @@ class Reminders(commands.Cog):
             logging.error(f"error fetching reminders: {e}")
             await ctx.send("error retrieving reminders.")
 
-    @commands.command(name='clearreminder')
+    @commands.command(name='clearreminder', aliases=['deletereminder', 'removereminder'])
     async def clear_reminder(self, ctx, reminder_id: int):
         try:
             conn = db_connection()
@@ -211,7 +211,7 @@ class Reminders(commands.Cog):
             logging.error(f"error clearing reminder: {e}")
             await ctx.send("error clearing reminder.")
 
-    @commands.command(name='clearallreminders')
+    @commands.command(name='clearallreminders', aliases=['deleteallreminders'])
     async def clear_all_reminders(self, ctx):
         try:
             conn = db_connection()
@@ -230,7 +230,7 @@ class Reminders(commands.Cog):
 
     @tasks.loop(minutes=1)
     async def check_reminders(self):
-        logging.info("Checking reminders")
+        logging.info("checking reminders")
         try:
             conn = db_connection()
             cursor = conn.cursor()
@@ -246,7 +246,7 @@ class Reminders(commands.Cog):
                     reminder_channel_id = int(os.getenv('REMINDER_CHANNEL'))
                     reminder_channel = self.bot.get_channel(reminder_channel_id)
                     if reminder_channel:
-                        await reminder_channel.send(f"reminder for everyone: {reminder_message}")
+                        await reminder_channel.send(f"reminder for @here: {reminder_message}")
                 else:
                     # Send to the specific user
                     user = self.bot.get_user(target)
@@ -254,7 +254,7 @@ class Reminders(commands.Cog):
                         try:
                             await user.send(f"reminder: {reminder_message}")
                         except discord.Forbidden:
-                            logging.error(f"cannot DM user {target}. sending in channel instead.")
+                            logging.error(f"cannot dm user {target}. sending in channel instead.")
                             reminder_channel_id = int(os.getenv('REMINDER_CHANNEL'))
                             reminder_channel = self.bot.get_channel(reminder_channel_id)
                             if reminder_channel:
