@@ -29,26 +29,26 @@ class Fun(commands.Cog):
 
         await ctx.send(random.choice(responses))
 
-@commands.command(name='setpetname')
-async def set_petname(self, ctx, *, petname: str):
-    # Limit the pet name to 30 characters
-    max_length = 30
-    if len(petname) > max_length:
-        await ctx.send(f"petname too long! please keep it under {max_length} characters.")
-        return
+    @commands.command(name='setpetname')
+    async def set_petname(self, ctx, *, petname: str):
+        # Limit the pet name to 30 characters
+        max_length = 30
+        if len(petname) > max_length:
+            await ctx.send(f"petname too long! please keep it under {max_length} characters.")
+            return
 
-    # Allow most Unicode characters, but disallow control characters (e.g., \n, \t)
-    if any(ord(c) < 32 or ord(c) > 126 for c in petname):
-        await ctx.send("invalid characters in petname. please use only printable characters.")
-        return
+        # Allow most Unicode characters, but disallow control characters (e.g., \n, \t)
+        if any(ord(c) < 32 or ord(c) > 126 for c in petname):
+            await ctx.send("invalid characters in petname. please use only printable characters.")
+            return
 
-    conn = db_connection()
-    cursor = conn.cursor()
+        conn = db_connection()
+        cursor = conn.cursor()
 
-    cursor.execute('UPDATE users SET petname = ? WHERE user_id = ?', (petname, ctx.author.id))
-    conn.commit()
-    conn.close()
+        cursor.execute('UPDATE users SET petname = ? WHERE user_id = ?', (petname, ctx.author.id))
+        conn.commit()
+        conn.close()
 
-    await ctx.send(f"your petname has been set to '{petname}'.")
+        await ctx.send(f"your petname has been set to '{petname}'.")
 
     #tested91124
