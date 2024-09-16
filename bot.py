@@ -10,6 +10,8 @@ from cogs.points import Points #tested
 from cogs.rewards import Rewards #tested
 from cogs.tasks import Tasks #tested
 from cogs.fun import Fun #tested
+from cogs.memories import Memories #new
+from cogs.roles import RoleReactions
 from core.bot_instance import bot
 
 # load environment variables from .env file
@@ -19,7 +21,7 @@ load_dotenv(dotenv_path=env_path)
 TOKEN = os.getenv('DISCORD_TOKEN')
 
 async def load_cogs():
-    cogs = [Uptime, Reminders, Points, Tasks, Rewards, Fun]
+    cogs = [Uptime, Reminders, Points, Tasks, Rewards, Fun, Memories, RoleReactions]
     for cog in cogs:
         try:
             await bot.add_cog(cog(bot))
