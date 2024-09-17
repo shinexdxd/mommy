@@ -12,6 +12,8 @@ from dotenv import load_dotenv
 env_path = os.path.join('config', '.env')
 load_dotenv(dotenv_path=env_path)
 logging.basicConfig(level=logging.INFO)
+REMINDER_CHANNEL_ID = int(os.getenv('REMINDER_CHANNEL'))
+BOT_CHANNEL_ID = int(os.getenv('BOT_CHANNEL'))
 
 class Reminders(commands.Cog):
     def __init__(self, bot):
@@ -160,11 +162,15 @@ class Reminders(commands.Cog):
             await ctx.send(f"error fetching timezone: {e}")
             return
 
-        # Handle target and petname resolution
+        # Handle target and petname resolution (same as before)
         if target_str in ["me", "us", "we", "you"]:
             target_user_id, mention = special_keywords[target_str](ctx)
             target_user_id = target_user_id or (1 if target_str in ["us", "we"] else ctx.author.id)
-            label = label.replace(target_str, mention or f"<@{target_user_id}>")
+            # Ensure the replacement happens only in the target field
+            if target_str in ["us", "we"]:
+                label = label.replace(target_str, mention or f"<@{target_user_id}>")
+            else:
+                label = label
         else:
             petname_match = re.search(r"\b(\w+)\b", label)
             if petname_match:
@@ -210,17 +216,20 @@ class Reminders(commands.Cog):
 
         # Timezone offset for displaying the reminder
         timezone_offset = self.get_timezone_offset(timezone_str)
-        reminder_time_utc = datetime.fromtimestamp(reminder_time, tz=ZoneInfo('UTC'))
+        reminder_time_utc = datetime.fromtimestamp(reminder_time, tz=ZoneInfo(timezone_str))
         reminder_time_local = reminder_time_utc + timedelta(hours=timezone_offset)
         discord_timestamp = f"<t:{int(reminder_time_local.timestamp())}:R>"
 
         # Format response
-        formatted_response = f"reminder set for {discord_timestamp}: '{label}' (target: <@{target_user_id}>)"
+        if target_user_id == 1:
+            formatted_response = f"reminder set for {discord_timestamp}: '{label}' (target: @here)"
+        else:
+            formatted_response = f"reminder set for {discord_timestamp}: '{label}' (target: <@{target_user_id}>)"
+        
         if frequency:
             formatted_response += f" - repeats {frequency}"  # Display the frequency
 
         await ctx.send(formatted_response)
-
 
 
     @tasks.loop(seconds=60.0)
@@ -234,18 +243,37 @@ class Reminders(commands.Cog):
             cursor.execute('SELECT user_id, reminder_message, target, reminder_time, frequency FROM uptime_contexts WHERE type = "reminder" AND reminder_time <= ?', (current_time,))
             reminders = cursor.fetchall()
 
+            logging.info(f"Found reminders: {reminders}")
+
             for reminder in reminders:
                 user_id, reminder_message, target, reminder_time, frequency = reminder
-                channel = self.bot.get_channel(1 if target == 1 else 5)  # Replace with actual channel IDs
-                message_content = reminder_message.replace('@here', '@here') if target == 1 else reminder_message
 
-                if target != 1:
-                    member = await self.bot.fetch_user(user_id)
-                    await member.send(message_content)
-                else:
+                # Log each reminder being processed
+                logging.info(f"Processing reminder: user_id={user_id}, reminder_message={reminder_message}, target={target}, reminder_time={reminder_time}, frequency={frequency}")
+
+                if target == 1:
+                    channel = self.bot.get_channel(REMINDER_CHANNEL_ID)  # Use REMINDER_CHANNEL_ID for @here
+                    if not channel:
+                        logging.error(f"Channel with ID {REMINDER_CHANNEL_ID} not found.")
+                        continue
+                    
+                    # Include @here tag in the message content
+                    message_content = f"@here {reminder_message}"
                     await channel.send(message_content)
 
-                # If the reminder has a frequency, adjust and reschedule, otherwise delete
+                else:
+                    channel = self.bot.get_channel(BOT_CHANNEL_ID)  # Use BOT_CHANNEL_ID for DM or other notifications
+                    if not channel:
+                        logging.error(f"Channel with ID {BOT_CHANNEL_ID} not found.")
+                        continue
+
+                    member = await self.bot.fetch_user(user_id)
+                    if member:
+                        await member.send(reminder_message)
+                    else:
+                        logging.error(f"User with ID {user_id} not found.")
+
+                # Handle frequency and rescheduling
                 if frequency == "daily":
                     new_reminder_time = reminder_time + 86400  # 1 day
                 elif frequency == "monthly":
@@ -257,15 +285,23 @@ class Reminders(commands.Cog):
                 else:
                     new_reminder_time = None
 
+                # Log reminder rescheduling or deletion
                 if new_reminder_time:
+                    logging.info(f"Rescheduling reminder to new time: {new_reminder_time}")
                     cursor.execute('UPDATE uptime_contexts SET reminder_time = ? WHERE user_id = ? AND reminder_message = ?', (new_reminder_time, user_id, reminder_message))
                 else:
+                    logging.info(f"Deleting reminder: user_id={user_id}, reminder_message={reminder_message}")
                     cursor.execute('DELETE FROM uptime_contexts WHERE user_id = ? AND reminder_message = ?', (user_id, reminder_message))
+
                 conn.commit()
         except Exception as e:
             logging.error(f"error processing reminders: {e}")
         finally:
             conn.close()
+
+
+
+
 
     @commands.command(name='viewreminders', aliases=['reminders', 'getreminders'])
     async def view_reminders(self, ctx):
