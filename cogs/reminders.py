@@ -205,14 +205,15 @@ class Reminders(commands.Cog):
         cursor = conn.cursor()
 
         try:
-            cursor.execute('INSERT INTO uptime_contexts (type, reminder_message, user_id, target, created_at, reminder_time, frequency) VALUES (?, ?, ?, ?, ?, ?, ?)',
-                           ('reminder', label, ctx.author.id, target_user_id, current_time_unix, reminder_time, frequency))
+            cursor.execute('INSERT INTO uptime_contexts (type, reminder_message, user_id, target, created_at, reminder_time, frequency) VALUES (?, ?, ?, ?, ?, ?, ?)', 
+                           ("reminder", label, ctx.author.id, target_user_id, current_time_unix, reminder_time, frequency))
             conn.commit()
             logging.info(f"reminder inserted into database with target {target_user_id}")
         except Exception as e:
             await ctx.send(f"error inserting reminder into database: {e}")
         finally:
             conn.close()
+
 
         # Timezone offset for displaying the reminder
         timezone_offset = self.get_timezone_offset(timezone_str)
@@ -231,7 +232,6 @@ class Reminders(commands.Cog):
 
         await ctx.send(formatted_response)
 
-
     @tasks.loop(seconds=60.0)
     async def check_reminders(self):
         logging.info("checking for reminders...")
@@ -240,55 +240,68 @@ class Reminders(commands.Cog):
         current_time = int(datetime.utcnow().timestamp())
 
         try:
-            cursor.execute('SELECT user_id, reminder_message, target, reminder_time, frequency FROM uptime_contexts WHERE type = "reminder" AND reminder_time <= ?', (current_time,))
+            cursor.execute('''
+                SELECT user_id, reminder_message, target, reminder_time, frequency, type, message_id, channel_id 
+                FROM uptime_contexts 
+                WHERE (type = "reminder" OR type = "remindinguptime") AND reminder_time <= ?
+            ''', (current_time,))
             reminders = cursor.fetchall()
 
             logging.info(f"Found reminders: {reminders}")
 
             for reminder in reminders:
-                user_id, reminder_message, target, reminder_time, frequency = reminder
+                user_id, reminder_message, target, reminder_time, frequency, type, message_id, channel_id = reminder
 
                 # Log each reminder being processed
-                logging.info(f"Processing reminder: user_id={user_id}, reminder_message={reminder_message}, target={target}, reminder_time={reminder_time}, frequency={frequency}")
+                logging.info(f"Processing reminder: user_id={user_id}, reminder_message={reminder_message}, target={target}, reminder_time={reminder_time}, frequency={frequency}, type={type}")
 
-                if target == 1:
-                    channel = self.bot.get_channel(REMINDER_CHANNEL_ID)  # Use REMINDER_CHANNEL_ID for @here
-                    if not channel:
-                        logging.error(f"Channel with ID {REMINDER_CHANNEL_ID} not found.")
-                        continue
-                    
-                    # Include @here tag in the message content
-                    message_content = f"@here reminder!! {reminder_message}"
-                    await channel.send(message_content)
-
+                if type == "remindinguptime":
+                    channel = self.bot.get_channel(channel_id)
+                    if channel:
+                        message_link = f"https://discord.com/channels/{channel.guild.id}/{channel_id}/{message_id}"
+                        uptime_context = await self.get_uptime_context(message_id, channel_id)
+                        reminder_text = f"Reminder!! {reminder_message}\nUptime Context: {uptime_context}\nMessage Link: {message_link}"
+                        if target == 1:
+                            message_content = f"@here {reminder_text}"
+                            await channel.send(message_content)
+                        else:
+                            member = await self.bot.fetch_user(user_id)
+                            if member:
+                                await member.send(reminder_text)
+                            else:
+                                logging.error(f"user with ID {user_id} not found.")
                 else:
-                    channel = self.bot.get_channel(BOT_CHANNEL_ID)  # Use BOT_CHANNEL_ID for DM or other notifications
-                    if not channel:
-                        logging.error(f"channel with ID {BOT_CHANNEL_ID} not found.")
-                        continue
-
-                    member = await self.bot.fetch_user(user_id)
-                    if member:
-                        # Include the frequency only if it exists
+                    channel = self.bot.get_channel(REMINDER_CHANNEL_ID) if target == 1 else self.bot.get_channel(BOT_CHANNEL_ID)
+                    if channel:
                         reminder_text = f"reminder!! {reminder_message}"
                         if frequency:
                             reminder_text += f" - repeats {frequency}"
-                        await member.send(reminder_text)
+                        if target == 1:
+                            message_content = f"@here {reminder_text}"
+                            await channel.send(message_content)
+                        else:
+                            member = await self.bot.fetch_user(user_id)
+                            if member:
+                                await member.send(reminder_text)
+                            else:
+                                logging.error(f"user with ID {user_id} not found.")
                     else:
-                        logging.error(f"user with ID {user_id} not found.")
-
+                        logging.error(f"Channel with ID {channel.id} not found.")
 
                 # Handle frequency and rescheduling
+                new_reminder_time = None
                 if frequency == "daily":
                     new_reminder_time = reminder_time + 86400  # 1 day
-                elif frequency == "monthly":
-                    new_reminder_time = reminder_time + 2628000  # 1 month (approx)
-                elif frequency == "annually":
-                    new_reminder_time = reminder_time + 31536000  # 1 year
                 elif frequency == "weekly":
                     new_reminder_time = reminder_time + 604800  # 1 week
-                else:
-                    new_reminder_time = None
+                elif frequency == "monthly":
+                    # Calculate the next month's date
+                    next_month = datetime.fromtimestamp(reminder_time) + relativedelta(months=1)
+                    new_reminder_time = int(datetime(next_month.year, next_month.month, 1).timestamp())
+                elif frequency == "annually":
+                    # Calculate the same day next year
+                    next_year = datetime.fromtimestamp(reminder_time) + relativedelta(years=1)
+                    new_reminder_time = int(next_year.timestamp())
 
                 # Log reminder rescheduling or deletion
                 if new_reminder_time:
@@ -296,7 +309,7 @@ class Reminders(commands.Cog):
                     cursor.execute('UPDATE uptime_contexts SET reminder_time = ? WHERE reminder_message = ?', (new_reminder_time, reminder_message))
                 else:
                     logging.info(f"deleting reminder: user_id={user_id}, reminder_message={reminder_message}")
-                    cursor.execute('DELETE FROM uptime_contexts WHERE reminder_message = ?', (reminder_message))
+                    cursor.execute('DELETE FROM uptime_contexts WHERE reminder_message = ?', (reminder_message,))
 
                 conn.commit()
         except Exception as e:
@@ -304,13 +317,48 @@ class Reminders(commands.Cog):
         finally:
             conn.close()
 
+    async def get_uptime_context(self, message_id: int, channel_id: int):
+        """Helper function to get the uptime context for a message."""
+        channel = self.bot.get_channel(channel_id)
+        if not channel:
+            return "Channel not found."
+        try:
+            message = await channel.fetch_message(message_id)
+            message_time = message.created_at.replace(tzinfo=None)
+            current_time = datetime.utcnow()
+            uptime_duration = current_time - message_time
+            years, remainder = divmod(uptime_duration.days, 365)
+            months, days = divmod(remainder, 30)
+            hours, remainder = divmod(uptime_duration.seconds, 3600)
+            minutes, seconds = divmod(remainder, 60)
+
+            duration = []
+            if years > 0:
+                duration.append(f"{years}y")
+            if months > 0 or years > 0:
+                duration.append(f"{months}m")
+            if days > 0 or months > 0 or years > 0:
+                duration.append(f"{days}d")
+            if hours > 0 or days > 0 or months > 0 or years > 0:
+                duration.append(f"{hours}h")
+            if minutes > 0 or hours > 0 or days > 0 or months > 0 or years > 0:
+                duration.append(f"{minutes}m")
+            duration.append(f"{seconds}s")
+
+            return " ".join(duration)
+        except discord.NotFound:
+            return "message not found."
+        except discord.HTTPException:
+            return "failed to fetch the message."
+
+
 
     @commands.command(name='viewreminders', aliases=['reminders', 'getreminders'], help='view an embed listing all reminders')
     async def view_reminders(self, ctx):
         try:
             conn = db_connection()
             cursor = conn.cursor()
-            cursor.execute('SELECT id, reminder_message, reminder_time, target, frequency FROM uptime_contexts WHERE type = \'reminder\'')
+            cursor.execute('SELECT id, reminder_message, reminder_time, target, frequency FROM uptime_contexts WHERE type IN (?, ?)', ('reminder', 'remindinguptime'))
             reminders = cursor.fetchall()
             conn.close()
 
@@ -324,17 +372,21 @@ class Reminders(commands.Cog):
             timezone_offset = self.get_timezone_offset(timezone_str)
 
             for id, reminder_message, reminder_time, target, frequency in reminders:
-                reminder_time_local = reminder_time + int(timezone_offset * 3600)
+                # Fix the time format
+                reminder_time_local = int(reminder_time + timezone_offset * 3600)
                 formatted_time = f"<t:{reminder_time_local}:F>"
                 
+                # Ensure reminder_message is valid
+                reminder_message = reminder_message if reminder_message else "no message set"
+
+                # Handle target
                 if target == 1:
                     target_label = "@here"
+                elif target is None:
+                    target_label = "unknown"
                 else:
                     target_user = self.bot.get_user(target)
-                    if target_user:
-                        target_label = target_user.display_name
-                    else:
-                        target_label = "unknown"
+                    target_label = target_user.display_name if target_user else "unknown"
 
                 embed.add_field(name=f"reminder id: {id}", 
                                 value=f"time: {formatted_time}\nmessage: {reminder_message}\ntarget: {target_label}\nfrequency: {frequency}", 
@@ -344,6 +396,7 @@ class Reminders(commands.Cog):
         except Exception as e:
             logging.error(f"error fetching reminders: {e}")
             await ctx.send("error retrieving reminders.")
+
 
     @commands.command(name='clearreminder', help='clears a reminder by its id')
     async def clear_reminder(self, ctx, reminder_id: int):
@@ -362,10 +415,10 @@ class Reminders(commands.Cog):
                 # Delete the reminder
                 cursor.execute('DELETE FROM uptime_contexts WHERE id = ?', (reminder_id,))
                 conn.commit()
-                await ctx.send(f"Reminder with ID {reminder_id} has been cleared.")
-                logging.info(f"Reminder with ID {reminder_id} cleared by user {ctx.author.id}.")
+                await ctx.send(f"reminder with ID {reminder_id} has been cleared.")
+                logging.info(f"reminder with ID {reminder_id} cleared by user {ctx.author.id}.")
             else:
-                await ctx.send("Error: Reminder not found.")
+                await ctx.send("error: reminder not found.")
         except Exception as e:
             await ctx.send(f"Error clearing reminder: {e}")
             logging.error(f"Error clearing reminder with ID {reminder_id}: {e}")

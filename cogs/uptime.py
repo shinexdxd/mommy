@@ -1,9 +1,10 @@
 import discord
 from discord.ext import commands, tasks
-from core.utilities import db_connection
 from datetime import datetime
 from core.bot_instance import bot
 from core.utilities import db_connection, get_user_id_by_petname, get_petname
+from dateutil.relativedelta import relativedelta
+import calendar
 
 class Uptime(commands.Cog):
     def __init__(self, bot):
@@ -144,32 +145,86 @@ class Uptime(commands.Cog):
         finally:
             conn.close()
 
+    @commands.command(name='updatecontext')
+    @commands.has_permissions(administrator=True)
+    async def update_context(self, ctx, context_name: str, new_type: str = None, frequency: str = None):
+        conn = db_connection()
+        cursor = conn.cursor()
 
-#TODO: fix this?? or just update fuckups manually - need to add option to remove contexts individually
-    # @commands.command(name='updatecontext')
-    # @commands.has_permissions(administrator=True)
-    # async def update_context(self, ctx, context_name: str, remove_context: str = None):
-    #     conn = db_connection()
-    #     cursor = conn.cursor()
+        # Check if a new type is provided
+        if new_type:
+            # Update the context with the new type
+            cursor.execute('UPDATE uptime_contexts SET type = ? WHERE context_name = ?', (new_type, context_name))
+            conn.commit()  # Commit the changes immediately
 
-    #     if remove_context:
-    #         cursor.execute('DELETE FROM uptime_contexts WHERE context_name = ?', (remove_context,))
-    #         conn.commit()
-    #         await ctx.send(f"context'{remove_context}' has been removed.")
-    #     else:
-    #         if not ctx.message.reference:
-    #             await ctx.send("you need to reply to the message you want to update the context for.")
-    #             return
+            # If the new type is 'remindinguptime', we need to set a reminder_time and target
+            if new_type == 'remindinguptime':
+                # Fetch the original message timestamp
+                cursor.execute('SELECT message_id, channel_id FROM uptime_contexts WHERE context_name = ?', (context_name,))
+                context = cursor.fetchone()
 
-    #         new_message_id = ctx.message.reference.message_id
-    #         new_channel_id = ctx.message.channel.id
+                if context:
+                    message_id, channel_id = context
+                    channel = self.bot.get_channel(channel_id)
+                    if channel is not None:
+                        message = await channel.fetch_message(message_id)
+                        message_time = message.created_at
 
-    #         cursor.execute('UPDATE uptime_contexts SET message_id = ?, channel_id = ? WHERE context_name = ?', (new_message_id, new_channel_id, context_name))
-    #         conn.commit()
+                        # Process the frequency if provided with a '+' sign
+                        if frequency and frequency.startswith('+'):
+                            frequency = frequency[1:]  # Strip the '+' sign
 
-    #         await ctx.send(f"context '{context_name}' updated to message {new_message_id}.")
+                            # Calculate the next reminder_time based on frequency
+                            if frequency == 'monthly':
+                                # Calculate the first day of the next month
+                                next_month = message_time + relativedelta(months=1)
+                                next_month_start = next_month.replace(day=1)
+                                # Set reminder_time as the start of the next month
+                                reminder_time = next_month_start.timestamp()
+                            elif frequency == 'annually':
+                                # Calculate the same day next year
+                                next_year = message_time + relativedelta(years=1)
+                                reminder_time = next_year.timestamp()
+                            else:
+                                await ctx.send("please specify a valid frequency: '+monthly' or '+annually'.")
+                                conn.close()
+                                return
 
-    #     conn.close()
+                            # Update the reminder_time, frequency, and target=1 in the database
+                            cursor.execute('UPDATE uptime_contexts SET reminder_time = ?, frequency = ?, target = 1 WHERE context_name = ?', 
+                                           (reminder_time, frequency, context_name))
+                            conn.commit()  # Commit the changes after setting the reminder_time, frequency, and target
+
+                            await ctx.send(f"context '{context_name}' updated to type '{new_type}' with {frequency} reminders.")
+                        else:
+                            await ctx.send("please specify a frequency with a '+' sign, such as '+monthly' or '+annually'.")
+                            conn.close()
+                            return
+                    else:
+                        await ctx.send("channel not found.")
+                else:
+                    await ctx.send(f"no context found for '{context_name}'.")
+            else:
+                await ctx.send(f"context '{context_name}' updated to type '{new_type}'.")
+
+        # If no new type, update the message context
+        else:
+            if not ctx.message.reference:
+                await ctx.send("you need to reply to the message you want to update the context for.")
+                return
+
+            new_message_id = ctx.message.reference.message_id
+            new_channel_id = ctx.message.channel.id
+
+            cursor.execute('UPDATE uptime_contexts SET message_id = ?, channel_id = ?, target = 1 WHERE context_name = ?', 
+                           (new_message_id, new_channel_id, context_name))
+            conn.commit()  # Commit changes after updating the message, channel ID, and target
+
+            await ctx.send(f"context '{context_name}' updated to message {new_message_id}.")
+        
+        conn.close()
+
+
 
     @commands.command(name='listcontexts', aliases=['uptimes', 'viewuptimes', 'getuptimes', 'getalluptimes', 'alluptimes'])
     async def list_contexts(self, ctx):

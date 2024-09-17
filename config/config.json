@@ -18,5 +18,47 @@
     "memory_channels": {
         "❤️": "heart-memories",
         "🌟": "lol-memories"
+    },
+    "actions": {
+        "1": {
+            "message": "you rolled a 1! time for drawing!",
+            "gif_url": "http://media.boingboing.net/wp-content/uploads/2014/08/tumblr_nahjz9Y4An1qlq9poo4_500.gif"
+        },
+        "2": {
+            "message": "you rolled a 2! dj practice/music for you.",
+            "gif_url": "https://giffiles.alphacoders.com/173/173845.gif"
+        },
+        "3": {
+            "message": "you rolled a 3. time for coding.",
+            "gif_url": "https://c.tenor.com/AezZlqa4ZJYAAAAC/tenor.gif"
+        },
+        "4": {
+            "message": "you rolled a 4 - blender or drawing.",
+            "gif_url": "https://www.hellocatfood.com/wp-content/uploads/2020/02/blender_loop_1.gif"
+        },
+        "5": {
+            "message": "you rolled a 5! time for yoga or exercise.",
+            "gif_url": "https://c.tenor.com/_xv2Pgnyog8AAAAC/tenor.gif"
+        },
+        "6": {
+            "message": "you rolled a 6. touch grass on a walk.",
+            "gif_url": "https://64.media.tumblr.com/11931eba90c91dbb1d49303bce2dae19/46960ce1a30f7b01-03/s500x750/e65abf0c5d0c02da3afb5d0b4f8fa5ac90cf0fcb.gif"
+        },
+        "7": {
+            "message": "you rolled a 7 - spend some time reading",
+            "gif_url": "https://media.tenor.com/images/32665d17cd3a65fe7ba998c431657391/tenor.gif"
+        },
+        "8": {
+            "message": "you rolled an 8. take a look at that games backlog.",
+            "gif_url": "https://media.tenor.com/4CuBCHmGwJYAAAAC/owenepicboy-gaming.gif"
+        },
+        "9": {
+            "message": "you rolled a 9 - deep clean something.",
+            "gif_url": "https://c.tenor.com/tL8qNVVnSDwAAAAM/all-the-things-hyperbole-and-a-half.gif"
+        },
+        "10": {
+            "message": "you rolled a 10! roll again!",
+            "gif_url": "https://gifdb.com/images/high/you-died-dark-souls-glitchy-sideways-movement-zs50qsl85jsrl37q.gif"
+        }
     }
 }
