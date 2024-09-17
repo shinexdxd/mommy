@@ -258,20 +258,25 @@ class Reminders(commands.Cog):
                         continue
                     
                     # Include @here tag in the message content
-                    message_content = f"@here {reminder_message}"
+                    message_content = f"@here reminder!! {reminder_message}"
                     await channel.send(message_content)
 
                 else:
                     channel = self.bot.get_channel(BOT_CHANNEL_ID)  # Use BOT_CHANNEL_ID for DM or other notifications
                     if not channel:
-                        logging.error(f"Channel with ID {BOT_CHANNEL_ID} not found.")
+                        logging.error(f"channel with ID {BOT_CHANNEL_ID} not found.")
                         continue
 
                     member = await self.bot.fetch_user(user_id)
                     if member:
-                        await member.send(reminder_message)
+                        # Include the frequency only if it exists
+                        reminder_text = f"reminder!! {reminder_message}"
+                        if frequency:
+                            reminder_text += f" - repeats {frequency}"
+                        await member.send(reminder_text)
                     else:
-                        logging.error(f"User with ID {user_id} not found.")
+                        logging.error(f"user with ID {user_id} not found.")
+
 
                 # Handle frequency and rescheduling
                 if frequency == "daily":
@@ -287,20 +292,17 @@ class Reminders(commands.Cog):
 
                 # Log reminder rescheduling or deletion
                 if new_reminder_time:
-                    logging.info(f"Rescheduling reminder to new time: {new_reminder_time}")
-                    cursor.execute('UPDATE uptime_contexts SET reminder_time = ? WHERE user_id = ? AND reminder_message = ?', (new_reminder_time, user_id, reminder_message))
+                    logging.info(f"rescheduling reminder to new time: {new_reminder_time}")
+                    cursor.execute('UPDATE uptime_contexts SET reminder_time = ? WHERE reminder_message = ?', (new_reminder_time, reminder_message))
                 else:
-                    logging.info(f"Deleting reminder: user_id={user_id}, reminder_message={reminder_message}")
-                    cursor.execute('DELETE FROM uptime_contexts WHERE user_id = ? AND reminder_message = ?', (user_id, reminder_message))
+                    logging.info(f"deleting reminder: user_id={user_id}, reminder_message={reminder_message}")
+                    cursor.execute('DELETE FROM uptime_contexts WHERE reminder_message = ?', (reminder_message))
 
                 conn.commit()
         except Exception as e:
             logging.error(f"error processing reminders: {e}")
         finally:
             conn.close()
-
-
-
 
 
     @commands.command(name='viewreminders', aliases=['reminders', 'getreminders'])
