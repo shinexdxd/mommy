@@ -69,21 +69,12 @@ def setup_database():
             message_id INTEGER,  -- for uptimes
             channel_id INTEGER,  -- for uptimes
             reminder_message TEXT,  -- for reminders
-            reminder_time TIMESTAMP,  -- for reminders
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            user_id INTEGER NOT NULL,  -- links to the users table
+            user_id INTEGER NOT NULL, 
+            target INTEGER, 
+            created_at INTEGER, 
+            reminder_time INTEGER, 
+            frequency VARCHAR(20),  
             FOREIGN KEY (user_id) REFERENCES users (user_id)
-        )
-    ''')
-
-    # Create Reaction Roles Table (optional for future features)
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS reaction_roles (
-            message_id INTEGER,
-            emoji TEXT,
-            role_id INTEGER,
-            channel_id INTEGER,
-            PRIMARY KEY (message_id, emoji)
         )
     ''')
 
