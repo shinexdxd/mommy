@@ -10,7 +10,7 @@ class Points(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command(name='leaderboard', aliases=['viewleaderboard'])
+    @commands.command(name='leaderboard', aliases=['viewleaderboard'], help='view points leaderboard')
     async def leaderboard(self, ctx):
         print("leaderboard command called")  # Add this line to see if the command is being called
         conn = db_connection()
@@ -43,7 +43,7 @@ class Points(commands.Cog):
 
 
 
-    @commands.command(name='givepoints')
+    @commands.command(name='givepoints', help='givepoints [target] [points] [reason]')
     async def give_points(self, ctx, user: str, points: int, *, reason: str):
         try:
             conn = db_connection()
@@ -96,7 +96,7 @@ class Points(commands.Cog):
             await ctx.send("an unexpected error occurred while processing the command.")
 
 
-    @commands.command(name='viewpoints', aliases=['getpoints'])
+    @commands.command(name='viewpoints', aliases=['getpoints'], help='view your own points')
     async def view_points(self, ctx):
         conn = db_connection()
         cursor = conn.cursor()
@@ -111,7 +111,7 @@ class Points(commands.Cog):
         else:
             await ctx.send("you have no points.")
 
-    @commands.command(name='resetpoints')
+    @commands.command(name='resetpoints', help='resetpoints [target]')
     @commands.has_permissions(administrator=True)
     async def reset_points(self, ctx, user: str = None):
         conn = db_connection()

@@ -1,22 +1,26 @@
 import discord
 import os
 import asyncio
-from discord.ext import commands, tasks
+import logging
+from discord.ext import commands
 from dotenv import load_dotenv
-from core.utilities import db_connection
-from cogs.uptime import Uptime #tested, small features to add relating to autoreminder
-from cogs.reminders import Reminders #tested, needs work
-from cogs.points import Points #tested
-from cogs.rewards import Rewards #tested
-from cogs.tasks import Tasks #tested
-from cogs.fun import Fun #tested
-from cogs.memories import Memories #new
+from core.utilities import db_connection, CleanupTask
+from cogs.uptime import Uptime
+from cogs.reminders import Reminders
+from cogs.points import Points
+from cogs.rewards import Rewards
+from cogs.tasks import Tasks
+from cogs.fun import Fun
+from cogs.memories import Memories
 from cogs.roles import RoleReactions
 from core.bot_instance import bot
 
-# load environment variables from .env file
-env_path = os.path.join('config', '.env')
+# Set up logging
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
+# Load environment variables from .env file
+env_path = os.path.join('config', '.env')
 load_dotenv(dotenv_path=env_path)
 TOKEN = os.getenv('DISCORD_TOKEN')
 
@@ -25,9 +29,13 @@ async def load_cogs():
     for cog in cogs:
         try:
             await bot.add_cog(cog(bot))
-            print(f"successfully loaded {cog.__name__} cog.")
+            print(f"Successfully loaded {cog.__name__} cog.")
         except Exception as e:
-            print(f"failed to load {cog.__name__} cog: {e}")
+            print(f"Failed to load {cog.__name__} cog: {e}")
+
+async def run_cleanup_task():
+    cleanup_task = CleanupTask(bot)  # Initialize CleanupTask
+    await cleanup_task.cleanup()      # Run cleanup immediately
 
 @bot.event
 async def on_ready():
@@ -35,8 +43,13 @@ async def on_ready():
     print("registered commands:")
     for command in bot.commands:
         print(f"  - {command.name}")
-    await bot.wait_until_ready()  # wait until the bot is fully ready
-    channel = bot.get_channel(int(os.getenv('BOT_CHANNEL'))) 
+    
+    await bot.wait_until_ready()  # Wait until the bot is fully ready
+
+    # Run the cleanup task before sending the online message
+    await run_cleanup_task()
+    
+    channel = bot.get_channel(int(os.getenv('BOT_CHANNEL')))
     if channel:
         await channel.send('online. baking pie.')
     else:

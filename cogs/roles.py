@@ -86,56 +86,66 @@ class RoleReactions(commands.Cog):
         emoji = str(payload.emoji)
         print(f"Received reaction: {emoji}")
 
+        member = guild.get_member(payload.user_id)
+        if not member or member == self.bot.user:
+            return
+
         # Handle role reactions
         if payload.message_id == self.role_message_id:
             if emoji in self.roles:
                 role_name = self.roles[emoji]
-                print(f"Role name for emoji {emoji}: {role_name}")
+                print(f"role name for emoji {emoji}: {role_name}")
 
                 role = discord.utils.get(guild.roles, name=role_name)
                 if role:
-                    member = guild.get_member(payload.user_id)
-                    if member and member != self.bot.user:
-                        await member.add_roles(role)
-                        print(f"Added role {role_name} to {member.display_name}")
-                        try:
-                            await member.send(f"you have been given the {role_name} role!")
-                        except discord.Forbidden:
-                            print(f"Couldn't send a DM to {member.display_name}.")
+                    await member.add_roles(role)
+                    print(f"added role {role_name} to {member.display_name}")
+                    try:
+                        await member.send(f"you have been given the {role_name} role!")
+                    except discord.Forbidden:
+                        print(f"couldn't send a DM to {member.display_name}.")
                 else:
-                    print(f"Role {role_name} not found.")
+                    print(f"role {role_name} not found.")
 
         # Handle title reactions and update petname
         elif payload.message_id == self.title_message_id:
             if emoji in self.titles:
                 title_name = self.titles[emoji]
-                print(f"Title for emoji {emoji}: {title_name}")
+                print(f"title for emoji {emoji}: {title_name}")
 
                 title_role = discord.utils.get(guild.roles, name=title_name)
                 if title_role:
-                    member = guild.get_member(payload.user_id)
-                    if member and member != self.bot.user:
-                        await member.add_roles(title_role)
-                        print(f"Added title {title_name} to {member.display_name}")
-                        try:
-                            await member.send(f"you have been given the {title_name} title!")
-                        except discord.Forbidden:
-                            print(f"Couldn't send a DM to {member.display_name}.")
-                        
-                        # Strip the emoji from the title before updating the petname
-                        stripped_title = title_name.split(" ", 1)[1] if " " in title_name else title_name
-                        print(f"Setting petname for {member.display_name} to {stripped_title}")
-                        
-                        # Update the petname in the database
-                        conn = db_connection()
-                        cursor = conn.cursor()
-                        cursor.execute('UPDATE users SET petname = ? WHERE user_id = ?', (stripped_title, member.id))
-                        conn.commit()
-                        conn.close()
+                    # Remove all other title roles from the member
+                    current_roles = [role for role in member.roles if role.name in self.titles.values()]
+                    for role in current_roles:
+                        if role != title_role:
+                            await member.remove_roles(role)
+                            print(f"Removed role {role.name} from {member.display_name}")
 
-                        print(f"Updated petname to {stripped_title} for user {member.display_name}")
+                    # Add the new title role
+                    await member.add_roles(title_role)
+                    print(f"Added title {title_name} to {member.display_name}")
+
+                    try:
+                        await member.send(f"you have been given the {title_name} title!")
+                    except discord.Forbidden:
+                        print(f"couldn't send a DM to {member.display_name}.")
+
+                    # Strip the emoji from the title before updating the petname
+                    stripped_title = title_name.split(" ", 1)[1] if " " in title_name else title_name
+                    print(f"setting petname for {member.display_name} to {stripped_title}")
+
+                    # Update the petname in the database
+                    conn = db_connection()
+                    cursor = conn.cursor()
+                    cursor.execute('UPDATE users SET petname = ? WHERE user_id = ?', (stripped_title, member.id))
+                    conn.commit()
+                    conn.close()
+
+                    print(f"updated petname to {stripped_title} for user {member.display_name}")
                 else:
-                    print(f"Title {title_name} not found.")
+                    print(f"title {title_name} not found.")
+
 
     @commands.Cog.listener()
     async def on_raw_reaction_remove(self, payload):

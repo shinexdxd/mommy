@@ -9,13 +9,13 @@ class Fun(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command(name='hello', aliases=['hello?', 'hello!', 'hello.', 'hi.', 'hi', 'hi!', 'hi?', 'hey', 'hey.', 'hey!'])
+    @commands.command(name='hello', aliases=['hello?', 'hello!', 'hello.', 'hi.', 'hi', 'hi!', 'hi?', 'hey', 'hey.', 'hey!'], help="greet the bot!")
     async def hello(self, ctx):
         print("hello command executed")
         petname = await get_petname(ctx)
         await ctx.send(f"hello, {petname}!")
 
-    @commands.command(name='treat?')
+    @commands.command(name='treat?', help='ask mommy for a treat!')
     async def treat(self, ctx):
         petname = await get_petname(ctx)
         responses = [
@@ -30,7 +30,7 @@ class Fun(commands.Cog):
 
         await ctx.send(random.choice(responses))
 
-    @commands.command(name='setpetname')
+    @commands.command(name='setpetname', help='manually set petname in the user database ❌ prefer to use role reactions to set pet names!')
     async def set_petname(self, ctx, *, petname: str):
         # Limit the pet name to 30 characters
         max_length = 30
@@ -52,7 +52,7 @@ class Fun(commands.Cog):
 
         await ctx.send(f"your petname has been set to '{petname}'.")
 
-    @commands.command(name='names')
+    @commands.command(name='names', help='list petnames from the users database')
     async def get_petnames(self, ctx):
         conn = db_connection()
         cursor = conn.cursor()

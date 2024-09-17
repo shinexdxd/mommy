@@ -120,7 +120,7 @@ class Reminders(commands.Cog):
             logging.error(f"error parsing duration '{duration_str}': {e}")
             raise
 
-    @commands.command(name='settimezone')
+    @commands.command(name='settimezone', help='set timezone in user database, use string e.g. America/Chicago')
     async def set_timezone(self, ctx, timezone: str):
         try:
             tz = ZoneInfo(timezone)
@@ -136,7 +136,7 @@ class Reminders(commands.Cog):
 
         await ctx.send(f"your timezone has been set to {timezone}.")
 
-    @commands.command(name='remind')
+    @commands.command(name='remind', help='set a reminder, use remind [target] [in/at] [duration/time] [+frequency (optional!)] [label/message]')
     async def remind(self, ctx, *, datetime_label: str):
         logging.info(f"received remind command with input: {datetime_label}")
 
@@ -305,7 +305,7 @@ class Reminders(commands.Cog):
             conn.close()
 
 
-    @commands.command(name='viewreminders', aliases=['reminders', 'getreminders'])
+    @commands.command(name='viewreminders', aliases=['reminders', 'getreminders'], help='view an embed listing all reminders')
     async def view_reminders(self, ctx):
         try:
             conn = db_connection()
@@ -345,7 +345,7 @@ class Reminders(commands.Cog):
             logging.error(f"error fetching reminders: {e}")
             await ctx.send("error retrieving reminders.")
 
-    @commands.command(name='clearreminder')
+    @commands.command(name='clearreminder', help='clears a reminder by its id')
     async def clear_reminder(self, ctx, reminder_id: int):
         """
         Clears a reminder by its ID.

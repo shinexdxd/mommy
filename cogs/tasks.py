@@ -8,7 +8,7 @@ class Tasks(commands.Cog):
         self.bot = bot
 
     # Command: Add Task
-    @commands.command(name='addtask')
+    @commands.command(name='addtask', help='addtask [points] [task description/name]')
     async def add_task(self, ctx, points: int, *, task: str):
         conn = db_connection()
         cursor = conn.cursor()
@@ -21,7 +21,7 @@ class Tasks(commands.Cog):
 
 
     # Command: View Tasks
-    @commands.command(name='tasks', aliases=['viewtasks'])
+    @commands.command(name='tasks', aliases=['viewtasks'], help='view an embed with a list of tasks')
     async def view_tasks(self, ctx):
         conn = db_connection()
         cursor = conn.cursor()
@@ -46,7 +46,7 @@ class Tasks(commands.Cog):
         await ctx.send(embed=embed)
 
     # Command: Complete Task
-    @commands.command(name='completetask')
+    @commands.command(name='completetask', help='completetask [id] or completetask [id] [target]')
     async def complete_task(self, ctx, task_id: int, user: str = None):
         conn = db_connection()
         cursor = conn.cursor()

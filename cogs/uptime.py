@@ -12,7 +12,7 @@ class Uptime(commands.Cog):
 # Command to setuptime
 #TODO: ensure reminder uptimes have appropriate values being passed for autoreminder functionality
 #TODO: add "relationship" type with petname joins to uptime messages e.g. [foxy] + [puppy] have been [dating] for [duration] / [messagelink]
-    @commands.command(name='setuptime')
+    @commands.command(name='setuptime', help='reply to a message with setuptime [context] in bot channel or mommy, setuptime [context]')
     async def setuptime(self, ctx, *, context_name: str):
         print("setuptime command called!")
         if not ctx.message.reference:
@@ -50,7 +50,7 @@ class Uptime(commands.Cog):
         message_link = f"https://discord.com/channels/{ctx.guild.id}/{channel_id}/{message_id}"
         await ctx.send(f"uptime context '{context_name}' set for [message]({message_link}) with type {type}.")
  
-    @commands.command(name='uptime', aliases=['getuptime'])
+    @commands.command(name='uptime', aliases=['getuptime'], help='call an uptime by context name e.g. dating')
     async def uptime(self, ctx, context_name: str):
         conn = db_connection()
         cursor = conn.cursor()
@@ -108,7 +108,7 @@ class Uptime(commands.Cog):
         finally:
             conn.close()
 
-    @commands.command(name='resetuptimes')
+    @commands.command(name='resetuptimes', help='adim usage: reset all uptimes')
     @commands.has_permissions(administrator=True)
     async def reset_uptimes(self, ctx):
         conn = db_connection()
@@ -126,7 +126,7 @@ class Uptime(commands.Cog):
         finally:
             conn.close()
 
-    @commands.command(name='clearuptime')
+    @commands.command(name='clearuptime', help='admin usage: reset an uptime, use clearuptime [context name]')
     @commands.has_permissions(administrator=True)
     async def clear_uptimes(self, ctx, *, context_name: str):
         conn = db_connection()

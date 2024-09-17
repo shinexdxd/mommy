@@ -1,6 +1,21 @@
 import sqlite3
-from discord.ext import commands
-import dateparser
+import discord
+import os
+import json
+from discord.ext import commands, tasks
+from dotenv import load_dotenv
+
+# Load the .env file
+env_path = os.path.join('config', '.env')
+load_dotenv(dotenv_path=env_path)
+
+# Load the config.json file
+with open("config/config.json", "r", encoding="utf-8") as f:
+    config = json.load(f)
+
+BOT_CHANNEL_ID = int(os.getenv("BOT_CHANNEL"))
+ROLE_MESSAGE_ID = int(config["ROLE_MESSAGE_ID"])
+TITLE_MESSAGE_ID = int(config["TITLE_MESSAGE_ID"])
 
 # Database connection
 def db_connection():
@@ -62,4 +77,28 @@ special_keywords = {
     "you": lambda ctx: (ctx.message.mentions[0].id, ctx.message.mentions[0].mention) if ctx.message.mentions else (None, None)
 }
 
+class CleanupTask:
+    def __init__(self, bot):
+        self.bot = bot
+        self.cleanup.start()
 
+    @tasks.loop(hours=24)
+    async def cleanup(self):
+        bot_channel = self.bot.get_channel(BOT_CHANNEL_ID)
+        if not bot_channel:
+            print(f"Could not find channel with ID {BOT_CHANNEL_ID}")
+            return
+
+        async for message in bot_channel.history(limit=100):  # Adjust limit as needed
+            if message.id not in [ROLE_MESSAGE_ID, TITLE_MESSAGE_ID]:
+                try:
+                    await message.delete()
+                    print(f"Deleted message from {message.author}: {message.content}")
+                except discord.Forbidden:
+                    print("Missing permissions to delete messages.")
+                except discord.HTTPException as e:
+                    print(f"Failed to delete message: {e}")
+
+    @cleanup.before_loop
+    async def before_cleanup(self):
+        await self.bot.wait_until_ready()
