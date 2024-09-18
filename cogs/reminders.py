@@ -228,7 +228,7 @@ class Reminders(commands.Cog):
             formatted_response = f"reminder set for {discord_timestamp}: '{label}' (target: <@{target_user_id}>)"
         
         if frequency:
-            formatted_response += f" - repeats {frequency}"  # Display the frequency
+            formatted_response += f" | repeats {frequency}"  # Display the frequency
 
         await ctx.send(formatted_response)
 

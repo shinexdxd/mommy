@@ -64,11 +64,12 @@ async def get_petname(ctx):
 
     conn.close()
 
-    if petname:
+    # Check if petname is None or "no title" and return "cutie"
+    if petname and petname[0].lower() != "no title":
         return petname[0]
     else:
         return 'cutie'
-
+        
 # Who is Us
 special_keywords = {
     "me": lambda ctx: (ctx.author.id, ctx.author.mention),
@@ -86,18 +87,18 @@ class CleanupTask:
     async def cleanup(self):
         bot_channel = self.bot.get_channel(BOT_CHANNEL_ID)
         if not bot_channel:
-            print(f"Could not find channel with ID {BOT_CHANNEL_ID}")
+            print(f"could not find channel with ID {BOT_CHANNEL_ID}")
             return
 
         async for message in bot_channel.history(limit=100):  # Adjust limit as needed
             if message.id not in [ROLE_MESSAGE_ID, TITLE_MESSAGE_ID]:
                 try:
                     await message.delete()
-                    print(f"Deleted message from {message.author}: {message.content}")
+                    print(f"deleted message from {message.author}: {message.content}")
                 except discord.Forbidden:
-                    print("Missing permissions to delete messages.")
+                    print("missing permissions to delete messages.")
                 except discord.HTTPException as e:
-                    print(f"Failed to delete message: {e}")
+                    print(f"failed to delete message: {e}")
 
     @cleanup.before_loop
     async def before_cleanup(self):
